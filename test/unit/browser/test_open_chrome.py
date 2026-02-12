@@ -10,7 +10,7 @@ from keiba_auto_bet.models import AutoBetConfig
 
 
 # 正常系
-@patch("keiba_auto_bet.browser.time.sleep")
+@patch("keiba_auto_bet.browser.WebDriverWait")
 @patch("keiba_auto_bet.browser.webdriver.Chrome")
 @patch("keiba_auto_bet.browser.Service")
 @patch("keiba_auto_bet.browser.Options")
@@ -18,14 +18,16 @@ def test_open_chrome_headless(
     mock_options_cls: MagicMock,
     mock_service_cls: MagicMock,
     mock_chrome_cls: MagicMock,
-    mock_sleep: MagicMock,
+    mock_wait: MagicMock,
     sample_config: AutoBetConfig,
 ) -> None:
     """ヘッドレスモードでChromeを起動し、即パットURLを開く."""
     mock_options = MagicMock()
     mock_options_cls.return_value = mock_options
     mock_driver = MagicMock()
+    mock_driver.execute_script.return_value = "complete"
     mock_chrome_cls.return_value = mock_driver
+    mock_wait.return_value.until.return_value = None
 
     result = open_chrome(sample_config)
 
@@ -35,7 +37,7 @@ def test_open_chrome_headless(
     mock_driver.get.assert_called_once_with(sample_config.ipat_url)
 
 
-@patch("keiba_auto_bet.browser.time.sleep")
+@patch("keiba_auto_bet.browser.WebDriverWait")
 @patch("keiba_auto_bet.browser.webdriver.Chrome")
 @patch("keiba_auto_bet.browser.Service")
 @patch("keiba_auto_bet.browser.Options")
@@ -43,13 +45,16 @@ def test_open_chrome_not_headless(
     mock_options_cls: MagicMock,
     mock_service_cls: MagicMock,
     mock_chrome_cls: MagicMock,
-    mock_sleep: MagicMock,
+    mock_wait: MagicMock,
 ) -> None:
     """ヘッドレスでない場合headless引数が追加されない."""
     config = AutoBetConfig(max_bet=10000, headless=False)
     mock_options = MagicMock()
     mock_options_cls.return_value = mock_options
-    mock_chrome_cls.return_value = MagicMock()
+    mock_driver = MagicMock()
+    mock_driver.execute_script.return_value = "complete"
+    mock_chrome_cls.return_value = mock_driver
+    mock_wait.return_value.until.return_value = None
 
     open_chrome(config)
 
@@ -59,7 +64,7 @@ def test_open_chrome_not_headless(
     assert len(headless_calls) == 0
 
 
-@patch("keiba_auto_bet.browser.time.sleep")
+@patch("keiba_auto_bet.browser.WebDriverWait")
 @patch("keiba_auto_bet.browser.webdriver.Chrome")
 @patch("keiba_auto_bet.browser.Service")
 @patch("keiba_auto_bet.browser.Options")
@@ -67,18 +72,21 @@ def test_open_chrome_with_driver_path(
     mock_options_cls: MagicMock,
     mock_service_cls: MagicMock,
     mock_chrome_cls: MagicMock,
-    mock_sleep: MagicMock,
+    mock_wait: MagicMock,
     sample_config_with_driver_path: AutoBetConfig,
 ) -> None:
     """ChromeDriverパスが指定された場合、Serviceに渡される."""
-    mock_chrome_cls.return_value = MagicMock()
+    mock_driver = MagicMock()
+    mock_driver.execute_script.return_value = "complete"
+    mock_chrome_cls.return_value = mock_driver
+    mock_wait.return_value.until.return_value = None
 
     open_chrome(sample_config_with_driver_path)
 
     mock_service_cls.assert_called_once_with("/usr/local/bin/chromedriver")
 
 
-@patch("keiba_auto_bet.browser.time.sleep")
+@patch("keiba_auto_bet.browser.WebDriverWait")
 @patch("keiba_auto_bet.browser.webdriver.Chrome")
 @patch("keiba_auto_bet.browser.Service")
 @patch("keiba_auto_bet.browser.Options")
@@ -86,11 +94,14 @@ def test_open_chrome_without_driver_path(
     mock_options_cls: MagicMock,
     mock_service_cls: MagicMock,
     mock_chrome_cls: MagicMock,
-    mock_sleep: MagicMock,
+    mock_wait: MagicMock,
     sample_config: AutoBetConfig,
 ) -> None:
     """ChromeDriverパスが未指定の場合、引数なしでServiceが生成される."""
-    mock_chrome_cls.return_value = MagicMock()
+    mock_driver = MagicMock()
+    mock_driver.execute_script.return_value = "complete"
+    mock_chrome_cls.return_value = mock_driver
+    mock_wait.return_value.until.return_value = None
 
     open_chrome(sample_config)
 
@@ -98,7 +109,7 @@ def test_open_chrome_without_driver_path(
 
 
 # 準正常系
-@patch("keiba_auto_bet.browser.time.sleep")
+@patch("keiba_auto_bet.browser.WebDriverWait")
 @patch("keiba_auto_bet.browser.webdriver.Chrome")
 @patch("keiba_auto_bet.browser.Service")
 @patch("keiba_auto_bet.browser.Options")
@@ -106,7 +117,7 @@ def test_open_chrome_raises_browser_error_on_chrome_init_failure(
     mock_options_cls: MagicMock,
     mock_service_cls: MagicMock,
     mock_chrome_cls: MagicMock,
-    mock_sleep: MagicMock,
+    mock_wait: MagicMock,
     sample_config: AutoBetConfig,
 ) -> None:
     """Chrome起動に失敗した場合BrowserErrorが送出される."""
@@ -116,7 +127,7 @@ def test_open_chrome_raises_browser_error_on_chrome_init_failure(
         open_chrome(sample_config)
 
 
-@patch("keiba_auto_bet.browser.time.sleep")
+@patch("keiba_auto_bet.browser.WebDriverWait")
 @patch("keiba_auto_bet.browser.webdriver.Chrome")
 @patch("keiba_auto_bet.browser.Service")
 @patch("keiba_auto_bet.browser.Options")
@@ -124,7 +135,7 @@ def test_open_chrome_raises_browser_error_on_get_failure(
     mock_options_cls: MagicMock,
     mock_service_cls: MagicMock,
     mock_chrome_cls: MagicMock,
-    mock_sleep: MagicMock,
+    mock_wait: MagicMock,
     sample_config: AutoBetConfig,
 ) -> None:
     """URLアクセスに失敗した場合BrowserErrorが送出されdriverがquitされる."""

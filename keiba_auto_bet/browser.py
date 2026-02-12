@@ -4,7 +4,6 @@ Seleniumを使用した即パットのブラウザ操作を提供する。
 """
 
 import logging
-import time
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -17,6 +16,8 @@ from keiba_auto_bet.exceptions import BetError, BrowserError, LoginError, Purcha
 from keiba_auto_bet.models import AutoBetConfig, BetOrder, IpatCredentials, TicketType
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_TIMEOUT = 10
 
 
 def open_chrome(config: AutoBetConfig) -> webdriver.Chrome:
@@ -47,7 +48,9 @@ def open_chrome(config: AutoBetConfig) -> webdriver.Chrome:
 
         driver = webdriver.Chrome(service=service, options=chrome_options)
         driver.get(config.ipat_url)
-        time.sleep(3)
+        WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
+            lambda d: d.execute_script("return document.readyState") == "complete"
+        )
     except Exception as exc:
         if driver is not None:
             driver.quit()
@@ -68,29 +71,34 @@ def login(driver: webdriver.Chrome, credentials: IpatCredentials) -> None:
     """
     try:
         # INET IDの入力
-        inetid_input = driver.find_element(By.NAME, "inetid")
+        inetid_input = WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
+            ec.presence_of_element_located((By.NAME, "inetid"))
+        )
         inetid_input.send_keys(credentials.inet_id)
-        time.sleep(1)
 
         # ログインボタンをクリック
-        login_link = driver.find_element(By.XPATH, "//a[@title='ログイン' and @tabindex='4']")
+        login_link = WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
+            ec.element_to_be_clickable((By.XPATH, "//a[@title='ログイン' and @tabindex='4']"))
+        )
         login_link.click()
-        time.sleep(5)
 
         # 加入者番号・パスワード・P-ARSの入力
-        user_number_input = driver.find_element(By.NAME, "i")
+        user_number_input = WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
+            ec.presence_of_element_located((By.NAME, "i"))
+        )
         user_number_input.send_keys(credentials.user_number)
         password_input = driver.find_element(By.NAME, "p")
         password_input.send_keys(credentials.password)
         p_ars_input = driver.find_element(By.NAME, "r")
         p_ars_input.send_keys(credentials.p_ars)
-        time.sleep(3)
 
         # ネット投票メニューへボタンをクリック
         element = "//a[@title='ネット投票メニューへ' and @tabindex='5']"
-        login_link = driver.find_element(By.XPATH, element)
-        login_link.click()
-        time.sleep(3)
+        menu_link = WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
+            ec.element_to_be_clickable((By.XPATH, element))
+        )
+        menu_link.click()
+        WebDriverWait(driver, _DEFAULT_TIMEOUT).until(ec.staleness_of(menu_link))
     except Exception as exc:
         raise LoginError(f"ログインに失敗しました: {exc}") from exc
 
@@ -108,26 +116,32 @@ def navigate_to_bet_page(driver: webdriver.Chrome) -> None:
         # 通常投票ボタンをクリック
         try:
             element = "//button[@title='出馬表から馬を選択する方式です。']"
-            bet_button = driver.find_element(By.XPATH, element)
+            bet_button = WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
+                ec.element_to_be_clickable((By.XPATH, element))
+            )
             bet_button.click()
         except Exception:
             # お知らせページが挟まった場合のフォールバック
             try:
-                ok_button = driver.find_element(By.CLASS_NAME, "btn-ok")
+                ok_button = WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
+                    ec.element_to_be_clickable((By.CLASS_NAME, "btn-ok"))
+                )
                 ok_button.click()
                 logger.info("お知らせページが挟まったためOKボタンをクリックしました")
-                time.sleep(2)
                 element = "//button[@title='出馬表から馬を選択する方式です。']"
-                bet_button = driver.find_element(By.XPATH, element)
+                bet_button = WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
+                    ec.element_to_be_clickable((By.XPATH, element))
+                )
                 bet_button.click()
             except Exception as inner_exc:
                 raise BetError("お知らせページのOKボタンが見つかりませんでした") from inner_exc
-        time.sleep(2)
 
         # レース選択ボタン（12Rを選択して購入画面に遷移）
-        race_select_button = driver.find_element(By.XPATH, "//button[contains(., '12R')]")
+        race_select_button = WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
+            ec.element_to_be_clickable((By.XPATH, "//button[contains(., '12R')]"))
+        )
         race_select_button.click()
-        time.sleep(2)
+        WebDriverWait(driver, _DEFAULT_TIMEOUT).until(ec.staleness_of(race_select_button))
     except BetError:
         raise
     except Exception as exc:
@@ -149,7 +163,9 @@ def select_race(driver: webdriver.Chrome, venue: str, race_number: int) -> None:
         # 競馬場を選択
         element_id = "select-course-race-course"
         keibajo_select = Select(
-            WebDriverWait(driver, 5).until(ec.element_to_be_clickable((By.ID, element_id)))
+            WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
+                ec.element_to_be_clickable((By.ID, element_id))
+            )
         )
         venue_found = False
         for option in keibajo_select.options:
@@ -159,13 +175,14 @@ def select_race(driver: webdriver.Chrome, venue: str, race_number: int) -> None:
                 break
         if not venue_found:
             raise BetError(f"競馬場が見つかりませんでした: {venue}")
-        time.sleep(2)
 
-        # レースを選択
+        # レースを選択（競馬場選択後のプルダウン更新を待機）
         element_id = "select-course-race-race"
-        race_select = Select(
-            WebDriverWait(driver, 5).until(ec.element_to_be_clickable((By.ID, element_id)))
+        race_option_xpath = f"//select[@id='{element_id}']//option[contains(., '{race_number}R')]"
+        WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
+            ec.presence_of_element_located((By.XPATH, race_option_xpath))
         )
+        race_select = Select(driver.find_element(By.ID, element_id))
         race_found = False
         for option in race_select.options:
             if f"{race_number}R" in option.text:
@@ -174,7 +191,6 @@ def select_race(driver: webdriver.Chrome, venue: str, race_number: int) -> None:
                 break
         if not race_found:
             raise BetError(f"レースが見つかりませんでした: {race_number}R")
-        time.sleep(2)
     except BetError:
         raise
     except Exception as exc:
@@ -201,34 +217,37 @@ def bet_win_or_place(
     try:
         # 馬券タイプのプルダウンから選択
         bet_type_select = Select(
-            WebDriverWait(driver, 5).until(ec.element_to_be_clickable((By.ID, "bet-basic-type")))
+            WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
+                ec.element_to_be_clickable((By.ID, "bet-basic-type"))
+            )
         )
         bet_type_select.select_by_visible_text(ticket_type.value)
-        time.sleep(5)
 
         # 馬番のチェックボックスにチェックを入れる
-        label_element = driver.find_element(By.XPATH, f"//label[@for='no{horse_number}']")
+        label_element = WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
+            ec.presence_of_element_located((By.XPATH, f"//label[@for='no{horse_number}']"))
+        )
         checkbox = label_element.find_element(By.CLASS_NAME, "check")
         driver.execute_script("arguments[0].click();", checkbox)
-        time.sleep(3)
 
         # 金額入力
-        amount_input = WebDriverWait(driver, 5).until(
+        amount_input = WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
             ec.element_to_be_clickable(
                 (By.XPATH, "//input[@maxlength='4' and @ng-model='vm.nUnit']")
             )
         )
         amount_input.clear()
         amount_input.send_keys(str(amount // 100))
-        time.sleep(3)
 
         # セットボタンをクリック
         element = "button.btn.btn-lg.btn-set.btn-primary[ng-click='vm.onSet()']"
-        set_button = WebDriverWait(driver, 5).until(
+        set_button = WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
             ec.element_to_be_clickable((By.CSS_SELECTOR, element))
         )
         set_button.click()
-        time.sleep(3)
+        WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
+            ec.element_to_be_clickable((By.ID, "bet-basic-type"))
+        )
     except Exception as exc:
         raise BetError(
             f"馬券選択に失敗しました（{ticket_type.value} {horse_number}番 {amount}円）: {exc}"
@@ -269,27 +288,32 @@ def confirm_purchase(driver: webdriver.Chrome, total_amount: int) -> None:
     try:
         # 購入予定リストボタンを押す
         element = "//button[contains(@class, 'btn btn-vote-list')]"
-        purchase_list_button = driver.find_element(By.XPATH, element)
+        purchase_list_button = WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
+            ec.element_to_be_clickable((By.XPATH, element))
+        )
         purchase_list_button.click()
-        time.sleep(3)
 
         # 合計金額を入力する
         element = "//input[@ng-model='vm.cAmountTotal']"
-        sum_buy = WebDriverWait(driver, 5).until(ec.element_to_be_clickable((By.XPATH, element)))
+        sum_buy = WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
+            ec.element_to_be_clickable((By.XPATH, element))
+        )
         sum_buy.clear()
         sum_buy.send_keys(str(total_amount))
-        time.sleep(3)
 
         # 購入ボタンを押す
-        purchase_button = driver.find_element(By.XPATH, "//button[contains(text(), '購入')]")
+        purchase_button = WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
+            ec.element_to_be_clickable((By.XPATH, "//button[contains(text(), '購入')]"))
+        )
         purchase_button.click()
-        time.sleep(3)
 
         # 確認ダイアログのOKボタンを押す
         element = "//button[contains(@class, 'btn-ok') and contains(text(), 'OK')]"
-        ok_button = WebDriverWait(driver, 5).until(ec.element_to_be_clickable((By.XPATH, element)))
+        ok_button = WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
+            ec.element_to_be_clickable((By.XPATH, element))
+        )
         ok_button.click()
-        time.sleep(5)
+        WebDriverWait(driver, _DEFAULT_TIMEOUT).until(ec.staleness_of(ok_button))
     except Exception as exc:
         raise PurchaseError(f"購入確定に失敗しました: {exc}") from exc
 
@@ -305,8 +329,10 @@ def navigate_to_top(driver: webdriver.Chrome) -> None:
     """
     try:
         element = "//a[@ui-sref='home' and @ng-click='vm.clickLogo()']"
-        top_return_link = driver.find_element(By.XPATH, element)
+        top_return_link = WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
+            ec.element_to_be_clickable((By.XPATH, element))
+        )
         top_return_link.click()
-        time.sleep(3)
+        WebDriverWait(driver, _DEFAULT_TIMEOUT).until(ec.staleness_of(top_return_link))
     except Exception as exc:
         raise BrowserError(f"トップ画面への遷移に失敗しました: {exc}") from exc
