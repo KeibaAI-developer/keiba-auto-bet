@@ -31,6 +31,7 @@ def open_chrome(config: AutoBetConfig) -> webdriver.Chrome:
     Raises:
         BrowserError: Chromeの起動に失敗した場合
     """
+    driver = None
     try:
         chrome_options = Options()
         if config.headless:
@@ -48,6 +49,8 @@ def open_chrome(config: AutoBetConfig) -> webdriver.Chrome:
         driver.get(config.ipat_url)
         time.sleep(3)
     except Exception as exc:
+        if driver is not None:
+            driver.quit()
         raise BrowserError(f"Chromeの起動に失敗しました: {exc}") from exc
 
     return driver
