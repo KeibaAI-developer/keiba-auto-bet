@@ -99,10 +99,10 @@ def _load_credentials_from_env() -> IpatCredentials:
             password=password,
             p_ars=p_ars,
         )
-    except ValueError as exc:
+    except ValueError as e:
         raise ValidationError(
-            f"環境変数から認証情報を読み込めませんでした。.envファイルを確認してください: {exc}"
-        ) from exc
+            f"環境変数から認証情報を読み込めませんでした。環境設定ファイル（.env）を確認してください: {e}"
+        ) from e
 
 
 def _validate_orders(orders: list[BetOrder], max_bet: int) -> None:
