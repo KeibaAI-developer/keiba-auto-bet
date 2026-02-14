@@ -51,11 +51,13 @@ def sample_config() -> AutoBetConfig:
 @patch("keiba_auto_bet.auto_bet.navigate_to_top")
 @patch("keiba_auto_bet.auto_bet.confirm_purchase")
 @patch("keiba_auto_bet.auto_bet.place_orders")
+@patch("keiba_auto_bet.auto_bet.dismiss_announce_page")
 @patch("keiba_auto_bet.auto_bet.login")
 @patch("keiba_auto_bet.auto_bet.open_chrome")
 def test_auto_bet_success(
     mock_open_chrome: MagicMock,
     mock_login: MagicMock,
+    mock_dismiss_announce_page: MagicMock,
     mock_place_orders: MagicMock,
     mock_confirm_purchase: MagicMock,
     mock_navigate_to_top: MagicMock,
@@ -72,6 +74,7 @@ def test_auto_bet_success(
     assert result is True
     mock_open_chrome.assert_called_once_with(sample_config)
     mock_login.assert_called_once_with(mock_driver, sample_credentials)
+    mock_dismiss_announce_page.assert_called_once_with(mock_driver)
     mock_place_orders.assert_called_once_with(mock_driver, sample_orders)
     mock_confirm_purchase.assert_called_once_with(mock_driver, 800)
     mock_navigate_to_top.assert_called_once_with(mock_driver)
@@ -81,11 +84,13 @@ def test_auto_bet_success(
 @patch("keiba_auto_bet.auto_bet.navigate_to_top")
 @patch("keiba_auto_bet.auto_bet.confirm_purchase")
 @patch("keiba_auto_bet.auto_bet.place_orders")
+@patch("keiba_auto_bet.auto_bet.dismiss_announce_page")
 @patch("keiba_auto_bet.auto_bet.login")
 @patch("keiba_auto_bet.auto_bet.open_chrome")
 def test_auto_bet_default_config(
     mock_open_chrome: MagicMock,
     mock_login: MagicMock,
+    mock_dismiss_announce_page: MagicMock,
     mock_place_orders: MagicMock,
     mock_confirm_purchase: MagicMock,
     mock_navigate_to_top: MagicMock,

@@ -4,8 +4,10 @@ Seleniumを使用した即パットのブラウザ操作を提供する。
 """
 
 import logging
+import time
 
 from selenium import webdriver
+from selenium.common.exceptions import StaleElementReferenceException, TimeoutException
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
@@ -103,6 +105,38 @@ def login(driver: webdriver.Chrome, credentials: IpatCredentials) -> None:
         raise LoginError(f"ログインに失敗しました: {exc}") from exc
 
 
+def dismiss_announce_page(driver: webdriver.Chrome) -> None:
+    """お知らせページが表示されていた場合にOKボタンをクリックして閉じる.
+
+    ログイン直後にお知らせページが挟まることがある。
+    お知らせページでない場合は何もしない。
+
+    Args:
+        driver: WebDriverオブジェクト
+
+    Raises:
+        BrowserError: お知らせページの処理に失敗した場合
+    """
+    announce_elements = driver.find_elements(By.XPATH, "//h1[contains(text(), 'お知らせ')]")
+    if not announce_elements:
+        logger.debug("お知らせページではありません。スキップします")
+        return
+
+    logger.info("お知らせページが検出されました。OKボタンをクリックして閉じます")
+    try:
+        ok_button = WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
+            ec.element_to_be_clickable((By.CSS_SELECTOR, "button.btn-ok"))
+        )
+        ok_button.click()
+        logger.info("お知らせページのOKボタンをクリックしました")
+
+        # お知らせページからの遷移を待機
+        WebDriverWait(driver, _DEFAULT_TIMEOUT).until(ec.staleness_of(ok_button))
+        logger.info("お知らせページからの遷移が完了しました")
+    except Exception as exc:
+        raise BrowserError(f"お知らせページの処理に失敗しました: {exc}") from exc
+
+
 def navigate_to_bet_page(driver: webdriver.Chrome) -> None:
     """購入画面に移動する.
 
@@ -114,34 +148,28 @@ def navigate_to_bet_page(driver: webdriver.Chrome) -> None:
     """
     try:
         # 通常投票ボタンをクリック
-        try:
-            element = "//button[@title='出馬表から馬を選択する方式です。']"
-            bet_button = WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
-                ec.element_to_be_clickable((By.XPATH, element))
-            )
-            bet_button.click()
-        except Exception:
-            # お知らせページが挟まった場合のフォールバック
-            try:
-                ok_button = WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
-                    ec.element_to_be_clickable((By.CLASS_NAME, "btn-ok"))
-                )
-                ok_button.click()
-                logger.info("お知らせページが挟まったためOKボタンをクリックしました")
-                element = "//button[@title='出馬表から馬を選択する方式です。']"
-                bet_button = WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
-                    ec.element_to_be_clickable((By.XPATH, element))
-                )
-                bet_button.click()
-            except Exception as inner_exc:
-                raise BetError("お知らせページのOKボタンが見つかりませんでした") from inner_exc
+        element = "//button[@title='出馬表から馬を選択する方式です。']"
+        bet_button = WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
+            ec.element_to_be_clickable((By.XPATH, element))
+        )
+        bet_button.click()
+        logger.info("通常投票ボタンをクリックしました")
+
+        # 通常投票ボタンクリック後のページ遷移を待機
+        WebDriverWait(driver, _DEFAULT_TIMEOUT).until(ec.staleness_of(bet_button))
+        logger.info("通常投票画面に遷移しました")
 
         # レース選択ボタン（12Rを選択して購入画面に遷移）
         race_select_button = WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
             ec.element_to_be_clickable((By.XPATH, "//button[contains(., '12R')]"))
         )
         race_select_button.click()
-        WebDriverWait(driver, _DEFAULT_TIMEOUT).until(ec.staleness_of(race_select_button))
+
+        # 購入画面への遷移を待機（馬券タイプ選択が表示されるまで待つ）
+        WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
+            ec.element_to_be_clickable((By.ID, "bet-basic-type"))
+        )
+        logger.info("購入画面に遷移しました")
     except BetError:
         raise
     except Exception as exc:
@@ -191,6 +219,9 @@ def select_race(driver: webdriver.Chrome, venue: str, race_number: int) -> None:
                 break
         if not race_found:
             raise BetError(f"レースが見つかりませんでした: {race_number}R")
+
+        # レース選択後、AngularJSのDOM再レンダリング完了を待機
+        _wait_for_element_stable(driver, By.ID, "bet-basic-type")
     except BetError:
         raise
     except Exception as exc:
@@ -215,13 +246,8 @@ def bet_win_or_place(
         BetError: 馬券選択または金額入力に失敗した場合
     """
     try:
-        # 馬券タイプのプルダウンから選択
-        bet_type_select = Select(
-            WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
-                ec.element_to_be_clickable((By.ID, "bet-basic-type"))
-            )
-        )
-        bet_type_select.select_by_visible_text(ticket_type.value)
+        # 馬券タイプのプルダウンから選択（DOM再レンダリングによるstale対策でリトライ）
+        _select_bet_type_with_retry(driver, ticket_type)
 
         # 馬番のチェックボックスにチェックを入れる
         label_element = WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
@@ -307,13 +333,17 @@ def confirm_purchase(driver: webdriver.Chrome, total_amount: int) -> None:
         )
         purchase_button.click()
 
-        # 確認ダイアログのOKボタンを押す
+        # 確認ダイアログのOKボタンを押す（ダイアログ本文が重なる場合があるためJS経由でクリック）
         element = "//button[contains(@class, 'btn-ok') and contains(text(), 'OK')]"
         ok_button = WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
             ec.element_to_be_clickable((By.XPATH, element))
         )
-        ok_button.click()
-        WebDriverWait(driver, _DEFAULT_TIMEOUT).until(ec.staleness_of(ok_button))
+        driver.execute_script("arguments[0].click();", ok_button)
+
+        # ダイアログが閉じるのを待機（SPAのためstaleness_ofではなく非表示を待つ）
+        WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
+            ec.invisibility_of_element_located((By.XPATH, element))
+        )
     except Exception as exc:
         raise PurchaseError(f"購入確定に失敗しました: {exc}") from exc
 
@@ -333,6 +363,81 @@ def navigate_to_top(driver: webdriver.Chrome) -> None:
             ec.element_to_be_clickable((By.XPATH, element))
         )
         top_return_link.click()
-        WebDriverWait(driver, _DEFAULT_TIMEOUT).until(ec.staleness_of(top_return_link))
+
+        # ホーム画面の通常投票ボタンが表示されるまで待機（SPAのためstaleness_ofは使わない）
+        home_element = "//button[@title='出馬表から馬を選択する方式です。']"
+        WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
+            ec.element_to_be_clickable((By.XPATH, home_element))
+        )
     except Exception as exc:
         raise BrowserError(f"トップ画面への遷移に失敗しました: {exc}") from exc
+
+
+_MAX_STALE_RETRIES = 3
+_STALE_RETRY_INTERVAL = 1.0
+
+
+def _wait_for_element_stable(
+    driver: webdriver.Chrome,
+    by: str,
+    value: str,
+    timeout: float = _DEFAULT_TIMEOUT,
+) -> None:
+    """要素のDOMが安定するまで待機する.
+
+    AngularJSのダイジェストサイクルによるDOM再レンダリング後、
+    要素が安定的にアクセス可能になるまで待機する。
+
+    Args:
+        driver: WebDriverオブジェクト
+        by: ロケータ戦略（By.ID等）
+        value: ロケータの値
+        timeout: タイムアウト秒数
+
+    Raises:
+        TimeoutException: タイムアウトしても要素が安定しなかった場合
+    """
+    end_time = time.time() + timeout
+    while time.time() < end_time:
+        try:
+            element = driver.find_element(by, value)
+            element.is_displayed()
+            time.sleep(0.5)
+            element.is_displayed()
+            return
+        except StaleElementReferenceException:
+            time.sleep(0.5)
+    raise TimeoutException(f"要素 {value} の安定化待機がタイムアウトしました")
+
+
+def _select_bet_type_with_retry(
+    driver: webdriver.Chrome,
+    ticket_type: TicketType,
+) -> None:
+    """馬券タイプを選択する（StaleElementReferenceException対策でリトライ）.
+
+    Args:
+        driver: WebDriverオブジェクト
+        ticket_type: 馬券の種類
+
+    Raises:
+        StaleElementReferenceException: リトライ上限を超えてもstaleの場合
+    """
+    for attempt in range(_MAX_STALE_RETRIES):
+        try:
+            bet_type_select = Select(
+                WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
+                    ec.element_to_be_clickable((By.ID, "bet-basic-type"))
+                )
+            )
+            bet_type_select.select_by_visible_text(ticket_type.value)
+            return
+        except StaleElementReferenceException:
+            if attempt == _MAX_STALE_RETRIES - 1:
+                raise
+            logger.debug(
+                "馬券タイプ選択でStaleElementReferenceExceptionが発生、リトライ(%d/%d)",
+                attempt + 1,
+                _MAX_STALE_RETRIES,
+            )
+            time.sleep(_STALE_RETRY_INTERVAL)

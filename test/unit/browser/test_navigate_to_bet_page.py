@@ -37,54 +37,6 @@ def test_navigate_to_bet_page_raises_bet_error_on_button_not_found(
 
 
 @patch("keiba_auto_bet.browser.WebDriverWait")
-def test_navigate_to_bet_page_fallback_ok_button(
-    mock_wait: MagicMock,
-    mock_driver: MagicMock,
-) -> None:
-    """お知らせページが挟まった場合、OKボタンクリック後に通常投票ボタンを再試行する."""
-    mock_ok_button = MagicMock()
-    mock_bet_button = MagicMock()
-    mock_race_button = MagicMock()
-
-    call_count = 0
-
-    def until_side_effect(condition: object) -> MagicMock:
-        nonlocal call_count
-        call_count += 1
-        # 1回目: 通常投票ボタンが見つからない
-        if call_count == 1:
-            raise Exception("通常投票ボタンが見つかりません")
-        # 2回目: OKボタン
-        if call_count == 2:
-            return mock_ok_button
-        # 3回目: 通常投票ボタン（リトライ）
-        if call_count == 3:
-            return mock_bet_button
-        # 4回目以降: レース選択ボタンとstaleness
-        return mock_race_button
-
-    mock_wait.return_value.until.side_effect = until_side_effect
-
-    navigate_to_bet_page(mock_driver)
-
-    mock_ok_button.click.assert_called_once()
-    mock_bet_button.click.assert_called_once()
-    mock_race_button.click.assert_called_once()
-
-
-@patch("keiba_auto_bet.browser.WebDriverWait")
-def test_navigate_to_bet_page_fallback_ok_button_also_fails(
-    mock_wait: MagicMock,
-    mock_driver: MagicMock,
-) -> None:
-    """お知らせページのOKボタンも見つからない場合BetErrorが送出される."""
-    mock_wait.return_value.until.side_effect = Exception("要素が見つかりません")
-
-    with pytest.raises(BetError):
-        navigate_to_bet_page(mock_driver)
-
-
-@patch("keiba_auto_bet.browser.WebDriverWait")
 def test_navigate_to_bet_page_raises_bet_error_on_race_select_failure(
     mock_wait: MagicMock,
     mock_driver: MagicMock,
