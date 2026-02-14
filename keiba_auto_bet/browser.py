@@ -169,7 +169,7 @@ def navigate_to_bet_page(driver: webdriver.Chrome) -> None:
         WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
             ec.element_to_be_clickable((By.ID, "bet-basic-type"))
         )
-        logger.info("レース選択画面に遷移しました")
+        logger.info("購入画面に遷移しました")
     except BetError:
         raise
     except Exception as exc:
