@@ -7,7 +7,7 @@ import logging
 import time
 
 from selenium import webdriver
-from selenium.common.exceptions import StaleElementReferenceException
+from selenium.common.exceptions import StaleElementReferenceException, TimeoutException
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
@@ -393,6 +393,9 @@ def _wait_for_element_stable(
         by: ロケータ戦略（By.ID等）
         value: ロケータの値
         timeout: タイムアウト秒数
+
+    Raises:
+        TimeoutException: タイムアウトしても要素が安定しなかった場合
     """
     end_time = time.time() + timeout
     while time.time() < end_time:
@@ -404,7 +407,7 @@ def _wait_for_element_stable(
             return
         except StaleElementReferenceException:
             time.sleep(0.5)
-    logger.warning("要素 %s の安定化待機がタイムアウトしました", value)
+    raise TimeoutException(f"要素 {value} の安定化待機がタイムアウトしました")
 
 
 def _select_bet_type_with_retry(
