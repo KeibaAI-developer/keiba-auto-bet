@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 
 from keiba_auto_bet.browser import (
     confirm_purchase,
+    dismiss_announce_page,
     login,
     navigate_to_top,
     open_chrome,
@@ -58,6 +59,7 @@ def auto_bet(
 
     try:
         login(driver, credentials)
+        dismiss_announce_page(driver)
         place_orders(driver, orders)
         confirm_purchase(driver, total_amount)
         navigate_to_top(driver)
