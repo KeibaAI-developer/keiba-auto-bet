@@ -6,9 +6,10 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+from selenium.common.exceptions import StaleElementReferenceException
 
-from keiba_auto_bet.auto_bet import AutoBetter
-from keiba_auto_bet.exceptions import BrowserError, KeibaAutoBetError, ValidationError
+from keiba_auto_bet.auto_bet import _MAX_STALE_RETRIES, AutoBetter
+from keiba_auto_bet.exceptions import BetError, BrowserError, KeibaAutoBetError, ValidationError
 from keiba_auto_bet.models import AutoBetConfig, BetOrder, IpatCredentials, TicketType
 
 
@@ -142,6 +143,50 @@ def test_auto_bet_with_default_config(
     assert result is True
 
 
+def test_auto_bet_stale_retry_succeeds(
+    sample_credentials: IpatCredentials,
+    sample_config: AutoBetConfig,
+    mock_logger: MagicMock,
+) -> None:
+    """馬券タイプ選択でstale例外が発生してもリトライで成功しTrueを返す."""
+    orders = [
+        BetOrder(
+            venue="東京",
+            race_number=11,
+            ticket_type=TicketType.WIN,
+            horse_number=3,
+            amount=500,
+        ),
+    ]
+    with (
+        patch("keiba_auto_bet.auto_bet.webdriver.Chrome") as mock_chrome_cls,
+        patch("keiba_auto_bet.auto_bet.WebDriverWait"),
+        patch("keiba_auto_bet.auto_bet.Select") as mock_select_cls,
+        patch("keiba_auto_bet.auto_bet.Options"),
+        patch("keiba_auto_bet.auto_bet.Service"),
+        patch("keiba_auto_bet.auto_bet.time.sleep"),
+    ):
+        mock_driver = MagicMock()
+        mock_chrome_cls.return_value = mock_driver
+        mock_driver.find_elements.return_value = []
+        mock_select_cls.side_effect = [
+            _select_factory(),  # _select_race: 競馬場選択
+            _select_factory(),  # _select_race: レース選択
+            StaleElementReferenceException(),  # _select_bet_type: 1回目stale
+            _select_factory(),  # _select_bet_type: 2回目リトライ成功
+        ]
+
+        better = AutoBetter(sample_credentials, sample_config, mock_logger)
+        result = better.bet(orders)
+
+    assert result is True
+    mock_logger.debug.assert_any_call(
+        "馬券タイプ選択でStaleElementReferenceExceptionが発生、リトライ(%d/%d)",
+        1,
+        _MAX_STALE_RETRIES,
+    )
+
+
 # 準正常系
 def test_auto_bet_empty_orders(
     sample_credentials: IpatCredentials,
@@ -229,6 +274,46 @@ def test_auto_bet_wraps_unexpected_exception(
 
     with pytest.raises(KeibaAutoBetError, match="予期しないエラーが発生しました"):
         better.bet(sample_orders)
+
+
+def test_auto_bet_stale_retry_max_exceeded(
+    sample_credentials: IpatCredentials,
+    sample_config: AutoBetConfig,
+    mock_logger: MagicMock,
+) -> None:
+    """馬券タイプ選択でstaleリトライ上限超過時にBetErrorが発生する."""
+    orders = [
+        BetOrder(
+            venue="東京",
+            race_number=11,
+            ticket_type=TicketType.WIN,
+            horse_number=3,
+            amount=500,
+        ),
+    ]
+    with (
+        patch("keiba_auto_bet.auto_bet.webdriver.Chrome") as mock_chrome_cls,
+        patch("keiba_auto_bet.auto_bet.WebDriverWait"),
+        patch("keiba_auto_bet.auto_bet.Select") as mock_select_cls,
+        patch("keiba_auto_bet.auto_bet.Options"),
+        patch("keiba_auto_bet.auto_bet.Service"),
+        patch("keiba_auto_bet.auto_bet.time.sleep"),
+    ):
+        mock_driver = MagicMock()
+        mock_chrome_cls.return_value = mock_driver
+        mock_driver.find_elements.return_value = []
+        mock_select_cls.side_effect = [
+            _select_factory(),  # _select_race: 競馬場選択
+            _select_factory(),  # _select_race: レース選択
+            StaleElementReferenceException(),  # _select_bet_type: 1回目stale
+            StaleElementReferenceException(),  # _select_bet_type: 2回目stale
+            StaleElementReferenceException(),  # _select_bet_type: 3回目stale（上限）
+        ]
+
+        better = AutoBetter(sample_credentials, sample_config, mock_logger)
+
+        with pytest.raises(BetError, match="馬券選択に失敗しました"):
+            better.bet(orders)
 
 
 def test_init_uses_module_logger_when_logger_not_provided(
