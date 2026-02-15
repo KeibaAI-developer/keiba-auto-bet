@@ -3,8 +3,7 @@
 馬券の自動購入を実行するサンプルスクリプト。
 """
 
-from keiba_auto_bet import AutoBetConfig, BetOrder, KeibaAutoBetError, TicketType
-from keiba_auto_bet import auto_bet as execute_auto_bet
+from keiba_auto_bet import AutoBetter, AutoBetConfig, BetOrder, KeibaAutoBetError, TicketType
 
 
 def main() -> None:
@@ -37,7 +36,8 @@ def main() -> None:
 
     # 自動購入を実行（credentialsは省略すると.envから自動読み込み）
     try:
-        result = execute_auto_bet(orders, config=config)
+        better = AutoBetter(config=config)
+        result = better.bet(orders)
         if result:
             print("馬券の自動購入が正常に完了しました")
     except KeibaAutoBetError as exc:

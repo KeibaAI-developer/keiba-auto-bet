@@ -76,7 +76,7 @@ cp .env.example .env
 ### 基本的な使い方
 
 ```python
-from keiba_auto_bet import AutoBetConfig, BetOrder, TicketType, auto_bet
+from keiba_auto_bet import AutoBetter, AutoBetConfig, BetOrder, TicketType
 
 # 購入注文の作成
 orders = [
@@ -103,13 +103,14 @@ config = AutoBetConfig(
 )
 
 # 自動購入を実行（認証情報は.envから自動読み込み）
-result = auto_bet(orders, config=config)
+better = AutoBetter(config=config)
+result = better.bet(orders)
 ```
 
 ### 認証情報を明示的に指定する場合
 
 ```python
-from keiba_auto_bet import IpatCredentials, auto_bet
+from keiba_auto_bet import AutoBetter, IpatCredentials
 
 credentials = IpatCredentials(
     inet_id="your_inet_id",
@@ -118,7 +119,8 @@ credentials = IpatCredentials(
     p_ars="your_p_ars",
 )
 
-result = auto_bet(orders, credentials=credentials, config=config)
+better = AutoBetter(credentials=credentials, config=config)
+result = better.bet(orders)
 ```
 
 ### ChromeDriverのパスを指定する場合
@@ -143,10 +145,11 @@ config = AutoBetConfig(
 | `ValidationError` | 入力バリデーションに関するエラー |
 
 ```python
-from keiba_auto_bet import KeibaAutoBetError, LoginError, auto_bet
+from keiba_auto_bet import AutoBetter, KeibaAutoBetError, LoginError
 
 try:
-    auto_bet(orders, credentials)
+    better = AutoBetter(credentials=credentials)
+    better.bet(orders)
 except LoginError:
     print("ログインに失敗しました。認証情報を確認してください。")
 except KeibaAutoBetError as e:
