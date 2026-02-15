@@ -11,7 +11,7 @@ try:
 except (PackageNotFoundError, ImportError):
     __version__ = "unknown"
 
-from keiba_auto_bet.auto_bet import auto_bet
+from keiba_auto_bet.auto_bet import AutoBetter
 from keiba_auto_bet.exceptions import (
     BetError,
     BrowserError,
@@ -23,7 +23,7 @@ from keiba_auto_bet.exceptions import (
 from keiba_auto_bet.models import AutoBetConfig, BetOrder, IpatCredentials, TicketType
 
 __all__ = [
-    "auto_bet",
+    "AutoBetter",
     "AutoBetConfig",
     "BetOrder",
     "IpatCredentials",
