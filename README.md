@@ -103,8 +103,8 @@ config = AutoBetConfig(
 )
 
 # 自動購入を実行（認証情報は.envから自動読み込み）
-client = AutoBetter(config=config)
-result = client.auto_bet(orders)
+better = AutoBetter(config=config)
+result = better.bet(orders)
 ```
 
 ### 認証情報を明示的に指定する場合
@@ -119,8 +119,8 @@ credentials = IpatCredentials(
     p_ars="your_p_ars",
 )
 
-client = AutoBetter(credentials=credentials, config=config)
-result = client.auto_bet(orders)
+better = AutoBetter(credentials=credentials, config=config)
+result = better.bet(orders)
 ```
 
 ### ChromeDriverのパスを指定する場合
@@ -148,8 +148,8 @@ config = AutoBetConfig(
 from keiba_auto_bet import AutoBetter, KeibaAutoBetError, LoginError
 
 try:
-    client = AutoBetter(credentials=credentials)
-    client.auto_bet(orders)
+    better = AutoBetter(credentials=credentials)
+    better.bet(orders)
 except LoginError:
     print("ログインに失敗しました。認証情報を確認してください。")
 except KeibaAutoBetError as e:
