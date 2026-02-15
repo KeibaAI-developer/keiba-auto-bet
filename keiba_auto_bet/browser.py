@@ -17,16 +17,15 @@ from selenium.webdriver.support.ui import Select, WebDriverWait
 from keiba_auto_bet.exceptions import BetError, BrowserError, LoginError, PurchaseError
 from keiba_auto_bet.models import AutoBetConfig, BetOrder, IpatCredentials, TicketType
 
-logger = logging.getLogger(__name__)
-
 _DEFAULT_TIMEOUT = 10
 
 
-def open_chrome(config: AutoBetConfig) -> webdriver.Chrome:
+def open_chrome(config: AutoBetConfig, logger: logging.Logger) -> webdriver.Chrome:
     """Chromeブラウザを起動して即パットページを開く.
 
     Args:
         config: 自動購入の設定
+        logger: ロガーインスタンス
 
     Returns:
         webdriver.Chrome: 起動したWebDriverオブジェクト
@@ -61,12 +60,13 @@ def open_chrome(config: AutoBetConfig) -> webdriver.Chrome:
     return driver
 
 
-def login(driver: webdriver.Chrome, credentials: IpatCredentials) -> None:
+def login(driver: webdriver.Chrome, credentials: IpatCredentials, logger: logging.Logger) -> None:
     """即パットにログインする.
 
     Args:
         driver: WebDriverオブジェクト
         credentials: 認証情報
+        logger: ロガーインスタンス
 
     Raises:
         LoginError: ログインに失敗した場合
@@ -105,7 +105,7 @@ def login(driver: webdriver.Chrome, credentials: IpatCredentials) -> None:
         raise LoginError(f"ログインに失敗しました: {exc}") from exc
 
 
-def dismiss_announce_page(driver: webdriver.Chrome) -> None:
+def dismiss_announce_page(driver: webdriver.Chrome, logger: logging.Logger) -> None:
     """お知らせページが表示されていた場合にOKボタンをクリックして閉じる.
 
     ログイン直後にお知らせページが挟まることがある。
@@ -113,6 +113,7 @@ def dismiss_announce_page(driver: webdriver.Chrome) -> None:
 
     Args:
         driver: WebDriverオブジェクト
+        logger: ロガーインスタンス
 
     Raises:
         BrowserError: お知らせページの処理に失敗した場合
@@ -137,11 +138,12 @@ def dismiss_announce_page(driver: webdriver.Chrome) -> None:
         raise BrowserError(f"お知らせページの処理に失敗しました: {exc}") from exc
 
 
-def navigate_to_bet_page(driver: webdriver.Chrome) -> None:
+def navigate_to_bet_page(driver: webdriver.Chrome, logger: logging.Logger) -> None:
     """購入画面に移動する.
 
     Args:
         driver: WebDriverオブジェクト
+        logger: ロガーインスタンス
 
     Raises:
         BetError: 購入画面への移動に失敗した場合
@@ -176,13 +178,16 @@ def navigate_to_bet_page(driver: webdriver.Chrome) -> None:
         raise BetError(f"購入画面への移動に失敗しました: {exc}") from exc
 
 
-def select_race(driver: webdriver.Chrome, venue: str, race_number: int) -> None:
+def select_race(
+    driver: webdriver.Chrome, venue: str, race_number: int, logger: logging.Logger
+) -> None:
     """競馬場とレースを選択する.
 
     Args:
         driver: WebDriverオブジェクト
         venue: 競馬場名
         race_number: レース番号
+        logger: ロガーインスタンス
 
     Raises:
         BetError: レース選択に失敗した場合
@@ -233,6 +238,7 @@ def bet_win_or_place(
     ticket_type: TicketType,
     horse_number: int,
     amount: int,
+    logger: logging.Logger,
 ) -> None:
     """単勝または複勝の馬券を選択して金額を入力する.
 
@@ -241,13 +247,14 @@ def bet_win_or_place(
         ticket_type: 馬券の種類（単勝または複勝）
         horse_number: 馬番
         amount: 購入金額（円）
+        logger: ロガーインスタンス
 
     Raises:
         BetError: 馬券選択または金額入力に失敗した場合
     """
     try:
         # 馬券タイプのプルダウンから選択（DOM再レンダリングによるstale対策でリトライ）
-        _select_bet_type_with_retry(driver, ticket_type)
+        _select_bet_type_with_retry(driver, ticket_type, logger)
 
         # 馬番のチェックボックスにチェックを入れる
         label_element = WebDriverWait(driver, _DEFAULT_TIMEOUT).until(
@@ -280,33 +287,35 @@ def bet_win_or_place(
         ) from exc
 
 
-def place_orders(driver: webdriver.Chrome, orders: list[BetOrder]) -> None:
+def place_orders(driver: webdriver.Chrome, orders: list[BetOrder], logger: logging.Logger) -> None:
     """全ての購入注文を処理する.
 
     Args:
         driver: WebDriverオブジェクト
         orders: 購入注文リスト
+        logger: ロガーインスタンス
 
     Raises:
         BetError: 馬券の選択・入力に失敗した場合
     """
-    navigate_to_bet_page(driver)
+    navigate_to_bet_page(driver, logger)
 
     for order in orders:
-        select_race(driver, order.venue, order.race_number)
+        select_race(driver, order.venue, order.race_number, logger)
 
         if order.ticket_type in (TicketType.WIN, TicketType.SHOW):
-            bet_win_or_place(driver, order.ticket_type, order.horse_number, order.amount)
+            bet_win_or_place(driver, order.ticket_type, order.horse_number, order.amount, logger)
         else:
             raise BetError(f"未対応の馬券種類です: {order.ticket_type}")
 
 
-def confirm_purchase(driver: webdriver.Chrome, total_amount: int) -> None:
+def confirm_purchase(driver: webdriver.Chrome, total_amount: int, logger: logging.Logger) -> None:
     """購入を確定する.
 
     Args:
         driver: WebDriverオブジェクト
         total_amount: 合計購入金額（円）
+        logger: ロガーインスタンス
 
     Raises:
         PurchaseError: 購入確定に失敗した場合
@@ -348,11 +357,12 @@ def confirm_purchase(driver: webdriver.Chrome, total_amount: int) -> None:
         raise PurchaseError(f"購入確定に失敗しました: {exc}") from exc
 
 
-def navigate_to_top(driver: webdriver.Chrome) -> None:
+def navigate_to_top(driver: webdriver.Chrome, logger: logging.Logger) -> None:
     """トップ画面に戻る.
 
     Args:
         driver: WebDriverオブジェクト
+        logger: ロガーインスタンス
 
     Raises:
         BrowserError: トップ画面への遷移に失敗した場合
@@ -413,12 +423,14 @@ def _wait_for_element_stable(
 def _select_bet_type_with_retry(
     driver: webdriver.Chrome,
     ticket_type: TicketType,
+    logger: logging.Logger,
 ) -> None:
     """馬券タイプを選択する（StaleElementReferenceException対策でリトライ）.
 
     Args:
         driver: WebDriverオブジェクト
         ticket_type: 馬券の種類
+        logger: ロガーインスタンス
 
     Raises:
         StaleElementReferenceException: リトライ上限を超えてもstaleの場合

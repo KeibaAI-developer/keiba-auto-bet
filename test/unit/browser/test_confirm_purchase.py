@@ -1,5 +1,6 @@
 """confirm_purchase関数のテスト."""
 
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13,6 +14,7 @@ from keiba_auto_bet.exceptions import PurchaseError
 def test_confirm_purchase_success(
     mock_wait: MagicMock,
     mock_driver: MagicMock,
+    mock_logger: logging.Logger,
 ) -> None:
     """正常に購入が確定される."""
     mock_purchase_button = MagicMock()
@@ -27,7 +29,7 @@ def test_confirm_purchase_success(
         None,  # staleness
     ]
 
-    confirm_purchase(mock_driver, 800)
+    confirm_purchase(mock_driver, 800, mock_logger)
 
     mock_sum_input.send_keys.assert_called_once_with("800")
 
@@ -36,6 +38,7 @@ def test_confirm_purchase_success(
 def test_confirm_purchase_amount_sent_as_string(
     mock_wait: MagicMock,
     mock_driver: MagicMock,
+    mock_logger: logging.Logger,
 ) -> None:
     """合計金額が文字列として入力フィールドに送信される."""
     mock_sum_input = MagicMock()
@@ -47,7 +50,7 @@ def test_confirm_purchase_amount_sent_as_string(
         None,  # staleness
     ]
 
-    confirm_purchase(mock_driver, 15000)
+    confirm_purchase(mock_driver, 15000, mock_logger)
 
     mock_sum_input.send_keys.assert_called_once_with("15000")
 
@@ -56,6 +59,7 @@ def test_confirm_purchase_amount_sent_as_string(
 def test_confirm_purchase_clicks_purchase_button(
     mock_wait: MagicMock,
     mock_driver: MagicMock,
+    mock_logger: logging.Logger,
 ) -> None:
     """購入ボタンがクリックされる."""
     mock_purchase_button = MagicMock()
@@ -67,7 +71,7 @@ def test_confirm_purchase_clicks_purchase_button(
         None,  # staleness
     ]
 
-    confirm_purchase(mock_driver, 800)
+    confirm_purchase(mock_driver, 800, mock_logger)
 
     mock_purchase_button.click.assert_called()
 
@@ -77,18 +81,20 @@ def test_confirm_purchase_clicks_purchase_button(
 def test_confirm_purchase_raises_purchase_error_on_list_button_failure(
     mock_wait: MagicMock,
     mock_driver: MagicMock,
+    mock_logger: logging.Logger,
 ) -> None:
     """購入予定リストボタンが見つからない場合PurchaseErrorが送出される."""
     mock_wait.return_value.until.side_effect = Exception("ボタンが見つかりません")
 
     with pytest.raises(PurchaseError, match="購入確定に失敗しました"):
-        confirm_purchase(mock_driver, 800)
+        confirm_purchase(mock_driver, 800, mock_logger)
 
 
 @patch("keiba_auto_bet.browser.WebDriverWait")
 def test_confirm_purchase_raises_purchase_error_on_amount_input_failure(
     mock_wait: MagicMock,
     mock_driver: MagicMock,
+    mock_logger: logging.Logger,
 ) -> None:
     """合計金額の入力に失敗した場合PurchaseErrorが送出される."""
     mock_wait.return_value.until.side_effect = [
@@ -97,13 +103,14 @@ def test_confirm_purchase_raises_purchase_error_on_amount_input_failure(
     ]
 
     with pytest.raises(PurchaseError, match="購入確定に失敗しました"):
-        confirm_purchase(mock_driver, 800)
+        confirm_purchase(mock_driver, 800, mock_logger)
 
 
 @patch("keiba_auto_bet.browser.WebDriverWait")
 def test_confirm_purchase_raises_purchase_error_on_ok_button_failure(
     mock_wait: MagicMock,
     mock_driver: MagicMock,
+    mock_logger: logging.Logger,
 ) -> None:
     """確認ダイアログのOKボタンが見つからない場合PurchaseErrorが送出される."""
     mock_sum_input = MagicMock()
@@ -119,4 +126,4 @@ def test_confirm_purchase_raises_purchase_error_on_ok_button_failure(
     ]
 
     with pytest.raises(PurchaseError, match="購入確定に失敗しました"):
-        confirm_purchase(mock_driver, 800)
+        confirm_purchase(mock_driver, 800, mock_logger)

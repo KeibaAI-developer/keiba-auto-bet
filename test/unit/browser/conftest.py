@@ -1,5 +1,6 @@
 """browser.open_chrome関数の共通fixture."""
 
+import logging
 from unittest.mock import MagicMock
 
 import pytest
@@ -39,6 +40,12 @@ def mock_driver() -> MagicMock:
     driver = MagicMock()
     driver.find_element.return_value = MagicMock()
     return driver
+
+
+@pytest.fixture()
+def mock_logger() -> logging.Logger:
+    """テスト用のロガーインスタンス."""
+    return logging.getLogger("test")
 
 
 @pytest.fixture()

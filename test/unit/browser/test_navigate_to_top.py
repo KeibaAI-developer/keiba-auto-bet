@@ -1,5 +1,6 @@
 """navigate_to_top関数のテスト."""
 
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13,6 +14,7 @@ from keiba_auto_bet.exceptions import BrowserError
 def test_navigate_to_top_success(
     mock_wait: MagicMock,
     mock_driver: MagicMock,
+    mock_logger: logging.Logger,
 ) -> None:
     """正常にトップ画面に戻れる."""
     mock_link = MagicMock()
@@ -21,7 +23,7 @@ def test_navigate_to_top_success(
         None,  # staleness
     ]
 
-    navigate_to_top(mock_driver)
+    navigate_to_top(mock_driver, mock_logger)
 
     mock_link.click.assert_called_once()
 
@@ -31,18 +33,20 @@ def test_navigate_to_top_success(
 def test_navigate_to_top_raises_browser_error_on_element_not_found(
     mock_wait: MagicMock,
     mock_driver: MagicMock,
+    mock_logger: logging.Logger,
 ) -> None:
     """トップリンクが見つからない場合BrowserErrorが送出される."""
     mock_wait.return_value.until.side_effect = Exception("リンクが見つかりません")
 
     with pytest.raises(BrowserError, match="トップ画面への遷移に失敗しました"):
-        navigate_to_top(mock_driver)
+        navigate_to_top(mock_driver, mock_logger)
 
 
 @patch("keiba_auto_bet.browser.WebDriverWait")
 def test_navigate_to_top_raises_browser_error_on_click_failure(
     mock_wait: MagicMock,
     mock_driver: MagicMock,
+    mock_logger: logging.Logger,
 ) -> None:
     """リンクのクリックに失敗した場合BrowserErrorが送出される."""
     mock_link = MagicMock()
@@ -50,4 +54,4 @@ def test_navigate_to_top_raises_browser_error_on_click_failure(
     mock_wait.return_value.until.return_value = mock_link
 
     with pytest.raises(BrowserError, match="トップ画面への遷移に失敗しました"):
-        navigate_to_top(mock_driver)
+        navigate_to_top(mock_driver, mock_logger)

@@ -1,5 +1,6 @@
 """auto_bet関数のテスト."""
 
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -47,6 +48,12 @@ def sample_config() -> AutoBetConfig:
     return AutoBetConfig(max_bet=10000)
 
 
+@pytest.fixture()
+def mock_logger() -> logging.Logger:
+    """テスト用のロガーインスタンス."""
+    return logging.getLogger("test")
+
+
 # 正常系
 @patch("keiba_auto_bet.auto_bet.navigate_to_top")
 @patch("keiba_auto_bet.auto_bet.confirm_purchase")
@@ -64,20 +71,21 @@ def test_auto_bet_success(
     sample_orders: list[BetOrder],
     sample_credentials: IpatCredentials,
     sample_config: AutoBetConfig,
+    mock_logger: logging.Logger,
 ) -> None:
     """正常に購入が完了する場合Trueを返す."""
     mock_driver = MagicMock()
     mock_open_chrome.return_value = mock_driver
 
-    result = auto_bet(sample_orders, sample_credentials, sample_config)
+    result = auto_bet(sample_orders, sample_credentials, sample_config, mock_logger)
 
     assert result is True
-    mock_open_chrome.assert_called_once_with(sample_config)
-    mock_login.assert_called_once_with(mock_driver, sample_credentials)
-    mock_dismiss_announce_page.assert_called_once_with(mock_driver)
-    mock_place_orders.assert_called_once_with(mock_driver, sample_orders)
-    mock_confirm_purchase.assert_called_once_with(mock_driver, 800)
-    mock_navigate_to_top.assert_called_once_with(mock_driver)
+    mock_open_chrome.assert_called_once_with(sample_config, mock_logger)
+    mock_login.assert_called_once_with(mock_driver, sample_credentials, mock_logger)
+    mock_dismiss_announce_page.assert_called_once_with(mock_driver, mock_logger)
+    mock_place_orders.assert_called_once_with(mock_driver, sample_orders, mock_logger)
+    mock_confirm_purchase.assert_called_once_with(mock_driver, 800, mock_logger)
+    mock_navigate_to_top.assert_called_once_with(mock_driver, mock_logger)
     mock_driver.quit.assert_called_once()
 
 
@@ -96,12 +104,13 @@ def test_auto_bet_default_config(
     mock_navigate_to_top: MagicMock,
     sample_orders: list[BetOrder],
     sample_credentials: IpatCredentials,
+    mock_logger: logging.Logger,
 ) -> None:
     """configがNoneの場合デフォルト設定が使用される."""
     mock_driver = MagicMock()
     mock_open_chrome.return_value = mock_driver
 
-    result = auto_bet(sample_orders, sample_credentials, None)
+    result = auto_bet(sample_orders, sample_credentials, None, mock_logger)
 
     assert result is True
     mock_open_chrome.assert_called_once()
@@ -142,6 +151,7 @@ def test_auto_bet_driver_quit_on_error(
     sample_orders: list[BetOrder],
     sample_credentials: IpatCredentials,
     sample_config: AutoBetConfig,
+    mock_logger: logging.Logger,
 ) -> None:
     """エラー発生時でもdriver.quit()が呼ばれる."""
     mock_driver = MagicMock()
@@ -149,6 +159,6 @@ def test_auto_bet_driver_quit_on_error(
     mock_login.side_effect = Exception("ログインエラー")
 
     with pytest.raises(Exception):
-        auto_bet(sample_orders, sample_credentials, sample_config)
+        auto_bet(sample_orders, sample_credentials, sample_config, mock_logger)
 
     mock_driver.quit.assert_called_once()

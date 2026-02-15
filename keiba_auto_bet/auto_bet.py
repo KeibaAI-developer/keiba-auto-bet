@@ -19,13 +19,12 @@ from keiba_auto_bet.browser import (
 from keiba_auto_bet.exceptions import KeibaAutoBetError, ValidationError
 from keiba_auto_bet.models import AutoBetConfig, BetOrder, IpatCredentials
 
-logger = logging.getLogger(__name__)
-
 
 def auto_bet(
     orders: list[BetOrder],
     credentials: IpatCredentials | None = None,
     config: AutoBetConfig | None = None,
+    logger: logging.Logger | None = None,
 ) -> bool:
     """馬券を自動購入する.
 
@@ -36,6 +35,7 @@ def auto_bet(
         orders: 購入注文リスト
         credentials: 即パットの認証情報（Noneの場合は環境変数から読み込む）
         config: 自動購入の設定（Noneの場合はデフォルト設定を使用）
+        logger: ロガーインスタンス。Noneの場合はモジュールロガーを使用
 
     Returns:
         bool: 購入が正常に完了した場合はTrue
@@ -44,6 +44,9 @@ def auto_bet(
         ValidationError: 入力内容のバリデーションエラー
         KeibaAutoBetError: 購入処理中にエラーが発生した場合
     """
+    if logger is None:
+        logger = logging.getLogger(__name__)
+
     if credentials is None:
         credentials = _load_credentials_from_env()
 
@@ -55,14 +58,14 @@ def auto_bet(
     total_amount = sum(order.amount for order in orders)
     logger.info("購入合計金額: %d円（%d件）", total_amount, len(orders))
 
-    driver = open_chrome(config)
+    driver = open_chrome(config, logger)
 
     try:
-        login(driver, credentials)
-        dismiss_announce_page(driver)
-        place_orders(driver, orders)
-        confirm_purchase(driver, total_amount)
-        navigate_to_top(driver)
+        login(driver, credentials, logger)
+        dismiss_announce_page(driver, logger)
+        place_orders(driver, orders, logger)
+        confirm_purchase(driver, total_amount, logger)
+        navigate_to_top(driver, logger)
         logger.info("馬券の自動購入が完了しました")
         return True
     except KeibaAutoBetError:

@@ -1,5 +1,6 @@
 """open_chrome関数のテスト."""
 
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -20,6 +21,7 @@ def test_open_chrome_headless(
     mock_chrome_cls: MagicMock,
     mock_wait: MagicMock,
     sample_config: AutoBetConfig,
+    mock_logger: logging.Logger,
 ) -> None:
     """ヘッドレスモードでChromeを起動し、即パットURLを開く."""
     mock_options = MagicMock()
@@ -29,7 +31,7 @@ def test_open_chrome_headless(
     mock_chrome_cls.return_value = mock_driver
     mock_wait.return_value.until.return_value = None
 
-    result = open_chrome(sample_config)
+    result = open_chrome(sample_config, mock_logger)
 
     assert result is mock_driver
     mock_options.add_argument.assert_any_call("--headless")
@@ -46,6 +48,7 @@ def test_open_chrome_not_headless(
     mock_service_cls: MagicMock,
     mock_chrome_cls: MagicMock,
     mock_wait: MagicMock,
+    mock_logger: logging.Logger,
 ) -> None:
     """ヘッドレスでない場合headless引数が追加されない."""
     config = AutoBetConfig(max_bet=10000, headless=False)
@@ -56,7 +59,7 @@ def test_open_chrome_not_headless(
     mock_chrome_cls.return_value = mock_driver
     mock_wait.return_value.until.return_value = None
 
-    open_chrome(config)
+    open_chrome(config, mock_logger)
 
     headless_calls = [
         call for call in mock_options.add_argument.call_args_list if call.args == ("--headless",)
@@ -74,6 +77,7 @@ def test_open_chrome_with_driver_path(
     mock_chrome_cls: MagicMock,
     mock_wait: MagicMock,
     sample_config_with_driver_path: AutoBetConfig,
+    mock_logger: logging.Logger,
 ) -> None:
     """ChromeDriverパスが指定された場合、Serviceに渡される."""
     mock_driver = MagicMock()
@@ -81,7 +85,7 @@ def test_open_chrome_with_driver_path(
     mock_chrome_cls.return_value = mock_driver
     mock_wait.return_value.until.return_value = None
 
-    open_chrome(sample_config_with_driver_path)
+    open_chrome(sample_config_with_driver_path, mock_logger)
 
     mock_service_cls.assert_called_once_with("/usr/local/bin/chromedriver")
 
@@ -96,6 +100,7 @@ def test_open_chrome_without_driver_path(
     mock_chrome_cls: MagicMock,
     mock_wait: MagicMock,
     sample_config: AutoBetConfig,
+    mock_logger: logging.Logger,
 ) -> None:
     """ChromeDriverパスが未指定の場合、引数なしでServiceが生成される."""
     mock_driver = MagicMock()
@@ -103,7 +108,7 @@ def test_open_chrome_without_driver_path(
     mock_chrome_cls.return_value = mock_driver
     mock_wait.return_value.until.return_value = None
 
-    open_chrome(sample_config)
+    open_chrome(sample_config, mock_logger)
 
     mock_service_cls.assert_called_once_with()
 
@@ -119,12 +124,13 @@ def test_open_chrome_raises_browser_error_on_chrome_init_failure(
     mock_chrome_cls: MagicMock,
     mock_wait: MagicMock,
     sample_config: AutoBetConfig,
+    mock_logger: logging.Logger,
 ) -> None:
     """Chrome起動に失敗した場合BrowserErrorが送出される."""
     mock_chrome_cls.side_effect = Exception("Chrome起動失敗")
 
     with pytest.raises(BrowserError, match="Chromeの起動に失敗しました"):
-        open_chrome(sample_config)
+        open_chrome(sample_config, mock_logger)
 
 
 @patch("keiba_auto_bet.browser.WebDriverWait")
@@ -137,6 +143,7 @@ def test_open_chrome_raises_browser_error_on_get_failure(
     mock_chrome_cls: MagicMock,
     mock_wait: MagicMock,
     sample_config: AutoBetConfig,
+    mock_logger: logging.Logger,
 ) -> None:
     """URLアクセスに失敗した場合BrowserErrorが送出されdriverがquitされる."""
     mock_driver = MagicMock()
@@ -144,6 +151,6 @@ def test_open_chrome_raises_browser_error_on_get_failure(
     mock_driver.get.side_effect = Exception("ページアクセス失敗")
 
     with pytest.raises(BrowserError, match="Chromeの起動に失敗しました"):
-        open_chrome(sample_config)
+        open_chrome(sample_config, mock_logger)
 
     mock_driver.quit.assert_called_once()
