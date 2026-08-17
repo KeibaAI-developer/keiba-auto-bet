@@ -532,7 +532,8 @@ def _load_credentials_from_env() -> IpatCredentials:
         )
     except ValueError as e:
         raise ValidationError(
-            f"環境変数から認証情報を読み込めませんでした。環境設定ファイル（.env）を確認してください: {e}"
+            "環境変数から認証情報を読み込めませんでした。"
+            f"環境設定ファイル（.env）を確認してください: {e}"
         ) from e
 
 
